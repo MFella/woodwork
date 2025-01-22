@@ -1,0 +1,7 @@
+:host {
+  @apply w-full h-full flex items-center justify-center mt-4;
+}
+
+progress::-webkit-progress-value {
+  transition: all 0.4s ease;
+}

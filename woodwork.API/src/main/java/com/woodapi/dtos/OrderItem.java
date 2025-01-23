@@ -1,14 +1,6 @@
 package com.woodapi.dtos;
 
-enum WoodComponent {
-    Lumber,
-    Beam,
-    Joist,
-    Plywood,
-    Door
-}
-
-class OrderItem {
+public class OrderItem {
     private WoodComponent component;
     private Long count;
 
@@ -22,13 +14,5 @@ class OrderItem {
 
     public Long getCount() {
         return count;
-    }
-}
-
-public class OrderDTO {
-    private OrderItem[] orderItems;
-
-    public OrderItem[] getOrderItems() {
-        return orderItems;
     }
 }

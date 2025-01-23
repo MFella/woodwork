@@ -12,6 +12,7 @@
     transform: rotate(-90deg);
   }
 }
+
 ::view-transition-old(count),
 ::view-transition-new(count) {
   animation-duration: 200ms;

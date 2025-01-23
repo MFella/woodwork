@@ -21,6 +21,28 @@
 				org.springframework
 			</groupId>
 			<artifactId>
+				spring-webflux
+			</artifactId>
+			<version>
+				5.3.28
+			</version>
+		</dependency>
+		<dependency>
+			<groupId>
+				io.projectreactor.netty
+			</groupId>
+			<artifactId>
+				reactor-netty
+			</artifactId>
+			<version>
+				1.2.2
+			</version>
+		</dependency>
+		<dependency>
+			<groupId>
+				org.springframework
+			</groupId>
+			<artifactId>
 				spring-webmvc
 			</artifactId>
 			<version>

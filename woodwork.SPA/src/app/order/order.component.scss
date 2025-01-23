@@ -5,3 +5,7 @@
 progress::-webkit-progress-value {
   transition: all 0.4s ease;
 }
+
+.invalid {
+  @apply border-2 border-rose-500;
+}

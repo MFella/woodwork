@@ -2,26 +2,36 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  DestroyRef,
   inject,
   type OnInit,
 } from '@angular/core';
 import {
+  FormArray,
   FormControl,
   FormGroup,
   FormsModule,
   ReactiveFormsModule,
+  Validators,
+  type ValidatorFn,
 } from '@angular/forms';
 import {
   orderEntities,
   type OrderEntity,
-  type OrderFormActions,
-  type OrderFormGroup,
+  type OrderRecordFormGroup,
 } from '../_typings/order.typings';
 import { RestService } from '../_services/rest.service';
-import type { Subscription } from 'rxjs';
+import { type Subscription } from 'rxjs';
 import { NgClass } from '@angular/common';
 import { AlertService } from '../alert.service';
 import type { OrderToScheduleDto } from '../_typings/_dtos/order-to-schedule.dto';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+
+const formErrorMessages = {
+  min: 'Value is less than 1',
+  max: 'Value is greater than 99999',
+  required: 'Value is required',
+} as const;
 
 @Component({
   selector: 'app-order',
@@ -34,24 +44,36 @@ export class OrderComponent implements OnInit {
   private static readonly PROGRESS_FINISHED_THRESHOLD = 100;
   readonly MAX_RESOURCE_COUNT = 99999;
   readonly MIN_RESOURCE_COUNT = 1;
+  readonly ORDER_FORM_COUNT_VALIDATORS: Array<ValidatorFn> = [
+    Validators.required,
+    Validators.min(this.MIN_RESOURCE_COUNT),
+    Validators.max(this.MAX_RESOURCE_COUNT),
+  ];
+  readonly ORDER_FORM_NAME_VALIDATORS: Array<ValidatorFn> = [
+    Validators.required,
+  ];
+
   private readonly restService = inject(RestService);
   private readonly alertService = inject(AlertService);
+  readonly #destroyRef = inject(DestroyRef);
 
   readonly #changeDetectorRef = inject(ChangeDetectorRef);
 
   private sendOrderSubscription?: Subscription;
   allOrderFields: Set<OrderEntity> = new Set<OrderEntity>(orderEntities);
-  pickedOrderFieldsMap: Map<OrderEntity, number> = new Map([['Beam', 1]]);
   availableOrderFields: Set<OrderEntity> = new Set<OrderEntity>();
-  areSomeValuesIncorrect = false;
 
-  // orderFormGroup: FormGroup<OrderFormGroup> = new FormGroup<OrderFormGroup>({
-  //   Beam: new FormControl(),
-  //   Door: new FormControl(),
-  //   Joist: new FormControl(),
-  //   Lumber: new FormControl(),
-  //   Plywood: new FormControl(),
-  // });
+  orderFormGroup: FormGroup = new FormGroup({
+    components: new FormArray<FormGroup<OrderRecordFormGroup>>([
+      new FormGroup<OrderRecordFormGroup>({
+        name: new FormControl(
+          'Beam' as OrderEntity,
+          this.ORDER_FORM_NAME_VALIDATORS
+        ),
+        count: new FormControl(1, this.ORDER_FORM_COUNT_VALIDATORS),
+      }),
+    ]),
+  });
 
   canAddOrderField = true;
   canSubtractOrderField = false;
@@ -59,113 +81,21 @@ export class OrderComponent implements OnInit {
   progressOfRequest = 0;
 
   ngOnInit(): void {
+    this.observeFormArrayValueChanged();
+    this.observeFormArrayStatusChanged();
     this.updateAvailableOrderFields();
-    this.#changeDetectorRef.detectChanges();
-  }
-
-  addOrderField(): void {
-    this.allOrderFields.add('Beam');
-
-    this.canAddOrderField =
-      this.pickedOrderFieldsMap.size !== this.allOrderFields.size;
-  }
-
-  toggleOrderField(action: OrderFormActions, orderEntity?: OrderEntity): void {
-    switch (action) {
-      case 'add':
-        {
-          const pickedOrderFieldsArr = Array.from(
-            this.pickedOrderFieldsMap.keys()
-          );
-          const formFieldToAdd = Array.from(this.allOrderFields)
-            .filter(
-              orderField => pickedOrderFieldsArr.indexOf(orderField) === -1
-            )
-            .at(0);
-          this.pickedOrderFieldsMap.set(formFieldToAdd as OrderEntity, 1);
-          this.updateAvailableOrderFields();
-        }
-        break;
-      case 'remove':
-        {
-          if (!orderEntity) {
-            console.error('Order entity is not provided');
-            return;
-          }
-          this.pickedOrderFieldsMap.delete(orderEntity);
-          this.updateAvailableOrderFields();
-        }
-        break;
-      default:
-        {
-          console.error(`Not implemented action: ${action}`);
-        }
-        break;
-    }
-
-    this.canAddOrderField =
-      this.pickedOrderFieldsMap.size !== this.allOrderFields.size;
-    this.canSubtractOrderField = this.pickedOrderFieldsMap.size > 1;
-    this.#changeDetectorRef.detectChanges();
-  }
-
-  selectOptionChanged(
-    eventTarget: EventTarget | null,
-    previousOrderEntity: OrderEntity,
-    selectElement: HTMLSelectElement
-  ): void {
-    if (eventTarget === null || !('value' in eventTarget)) {
-      console.log('Cannot assign - eventTarget is null');
-      return;
-    }
-
-    const previousOrderEntityCount =
-      this.pickedOrderFieldsMap.get(previousOrderEntity);
-    if (!previousOrderEntityCount) {
-      return;
-    }
-
-    const indexOfPreviousValue = Array.from(
-      this.pickedOrderFieldsMap.keys()
-    ).indexOf(previousOrderEntity);
-    this.pickedOrderFieldsMap.delete(previousOrderEntity);
-
-    if (indexOfPreviousValue === -1) {
-      console.error('Cannot find previous value');
-      return;
-    }
-    const pickedOrderFieldsArray = Array.from(this.pickedOrderFieldsMap);
-    pickedOrderFieldsArray.splice(indexOfPreviousValue, 0, [
-      eventTarget.value as OrderEntity,
-      previousOrderEntityCount,
-    ]);
-    this.pickedOrderFieldsMap = new Map(pickedOrderFieldsArray);
-
-    this.updateAvailableOrderFields();
-    selectElement.selectedIndex = 0;
-    this.#changeDetectorRef.detectChanges();
-  }
-
-  updateAvailableOrderFields(): void {
-    const pickedOrderFieldsArr = Array.from(this.pickedOrderFieldsMap.keys());
-    this.availableOrderFields = new Set(
-      Array.from(this.allOrderFields).filter(
-        field => !pickedOrderFieldsArr.includes(field)
-      )
-    );
-    this.#changeDetectorRef.detectChanges();
   }
 
   sendOrder(): void {
-    const orderItems = Object.fromEntries(
-      this.pickedOrderFieldsMap.entries()
-    ) satisfies OrderToScheduleDto;
+    const orderItems = this.getOrderFormComponents()
+      .value as OrderToScheduleDto;
 
     // if there are some form violations - display error banner
     if (
       Object.values(orderItems).some(
-        count =>
-          count > this.MAX_RESOURCE_COUNT || count < this.MIN_RESOURCE_COUNT
+        orderItem =>
+          orderItem.count! > this.MAX_RESOURCE_COUNT ||
+          orderItem.count! < this.MIN_RESOURCE_COUNT
       )
     ) {
       this.alertService.showError(
@@ -208,32 +138,123 @@ export class OrderComponent implements OnInit {
     this.progressOfRequest = 0;
   }
 
-  updateCountValue(
-    orderEntity: OrderEntity,
-    eventTarget: EventTarget | null
+  addFormGroupComponent(): void {
+    const firstAvailableComponentName = this.availableOrderFields
+      .keys()
+      .next().value;
+    if (!firstAvailableComponentName) {
+      console.error('Cannot add control');
+      return;
+    }
+
+    this.availableOrderFields.delete(firstAvailableComponentName);
+    this.getOrderFormComponents().push(
+      new FormGroup<OrderRecordFormGroup>({
+        name: new FormControl(
+          firstAvailableComponentName,
+          this.ORDER_FORM_NAME_VALIDATORS
+        ),
+        count: new FormControl(1, this.ORDER_FORM_COUNT_VALIDATORS),
+      })
+    );
+  }
+
+  removeFormGroupComponent(index: number): void {
+    this.getOrderFormComponents().removeAt(index);
+  }
+
+  getOrderFormComponents(): FormArray<FormGroup<OrderRecordFormGroup>> {
+    return this.orderFormGroup.controls['components'] as FormArray<
+      FormGroup<OrderRecordFormGroup>
+    >;
+  }
+
+  handleSelectValueChange(
+    eventTarget: EventTarget | null,
+    selectElement: HTMLSelectElement
   ): void {
-    if (eventTarget === null || !('value' in eventTarget)) {
-      console.log('Cannot assign - eventTarget is null');
+    if (!eventTarget || !(eventTarget as any)?.value) {
+      console.error('Select value hasnt been propagated');
       return;
     }
 
-    const orderEntityCountFromMap = this.pickedOrderFieldsMap.get(orderEntity);
-    if (orderEntityCountFromMap === undefined) {
+    selectElement.selectedIndex = 0;
+  }
+
+  getInvalidOrderErrorMessage(): string {
+    const accumulator: Array<Record<string, any>> = [];
+    this.getErrorsFromObject(
+      this.orderFormGroup,
+      'errors',
+      'controls',
+      accumulator
+    );
+    return accumulator.reduce(
+      (acc, value) =>
+        (acc += Object.keys(value)
+          .map(
+            v =>
+              (formErrorMessages[v as keyof typeof formErrorMessages] ?? v) +
+              ' '
+          )
+          .join(', ')),
+      'Violation rules: '
+    );
+  }
+
+  private getErrorsFromObject<T extends Record<string, any>>(
+    object: T,
+    key: string = 'errors',
+    searchPhrase = 'controls',
+    accumulator: Array<T> = []
+  ): void {
+    if (typeof object === 'object' && key in object && object[key]) {
+      accumulator.push(object[key]);
+    }
+
+    if (!(searchPhrase in object)) {
       return;
     }
 
-    const parsedValue = parseInt(eventTarget.value as string);
-    if (!isNaN(parsedValue)) {
-      this.pickedOrderFieldsMap.set(orderEntity, parsedValue);
-    }
+    Object.values(object[searchPhrase])?.map((obj: any) =>
+      this.getErrorsFromObject(obj, key, searchPhrase, accumulator)
+    );
+  }
 
-    this.areSomeValuesIncorrect = Array.from(
-      this.pickedOrderFieldsMap.values()
-    ).some(
-      value =>
-        value > this.MAX_RESOURCE_COUNT || value < this.MIN_RESOURCE_COUNT
+  private observeFormArrayValueChanged(): void {
+    this.orderFormGroup.valueChanges
+      .pipe(takeUntilDestroyed(this.#destroyRef))
+      .subscribe(() => {
+        this.updateAvailableOrderFields();
+      });
+  }
+
+  private observeFormArrayStatusChanged(): void {
+    this.orderFormGroup.statusChanges
+      .pipe(takeUntilDestroyed(this.#destroyRef))
+      .subscribe(status => {
+        if (status === 'INVALID') {
+          console.log(this.getOrderFormComponents());
+        }
+        console.log(status);
+      });
+  }
+
+  private updateAvailableOrderFields(): void {
+    const pickedOrderFieldsArr = (
+      this.orderFormGroup.controls['components'] as FormArray<
+        FormGroup<OrderRecordFormGroup>
+      >
+    ).controls.map(control => control.value?.name);
+
+    this.availableOrderFields = new Set(
+      Array.from(this.allOrderFields).filter(
+        field => !pickedOrderFieldsArr.includes(field)
+      )
     );
 
-    this.#changeDetectorRef.detectChanges();
+    this.canSubtractOrderField =
+      this.availableOrderFields.size > 0 &&
+      this.getOrderFormComponents().controls.length > 1;
   }
 }

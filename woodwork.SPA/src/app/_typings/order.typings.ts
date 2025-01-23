@@ -12,6 +12,11 @@ export type OrderEntity = (typeof orderEntities)[number];
 
 export type OrderFormActions = 'add' | 'remove';
 
-export type OrderFormGroup = {
-  [Key in OrderEntity]: AbstractControl<OrderEntity | null>;
+export type OrderRecord = {
+  name: OrderEntity | null;
+  count: number | null;
+};
+
+export type OrderRecordFormGroup = {
+  [Key in keyof OrderRecord]: AbstractControl<OrderRecord[Key]>;
 };

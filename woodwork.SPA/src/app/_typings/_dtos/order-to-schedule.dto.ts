@@ -1,5 +1,3 @@
-import type { OrderEntity } from '../order.typings';
+import type { OrderEntity, OrderRecord } from '../order.typings';
 
-export type OrderToScheduleDto = Partial<{
-  [Key in OrderEntity]: number;
-}>;
+export type OrderToScheduleDto = Array<OrderRecord>;

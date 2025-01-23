@@ -1,11 +1,6 @@
-<form (submit)="$event.preventDefault()">
+<form (submit)="$event.preventDefault()" [formGroup]="orderFormGroup">
   <div
     class="card bg-base-100 shadow-xl w-full sm:min-w-[30rem] border border-slate-100 overflow-hidden">
-    <!-- <figure>
-      <img
-        src="https://img.daisyui.com/images/stock/photo-1606107557195-0e29a4b5b4aa.webp"
-        alt="Shoes" />
-    </figure> -->
     <progress
       class="progress progress-info w-full top-0 absolute transition-all"
       [ngClass]="{
@@ -17,61 +12,62 @@
     <div class="card-body">
       <h2 class="card-title">Complete your order</h2>
       <strong class="text-gray-500 text-xs">Make wise decision 🌌</strong>
-      @for (pickedOrderField of this.pickedOrderFieldsMap; track $index) {
-      <div class="flex justify-around items-center gap-2">
-        <button
-          [disabled]="!canSubtractOrderField || isRequestPended"
-          (click)="toggleOrderField('remove', pickedOrderField[0])"
-          class="btn btn-square bg-rose-200 hover:bg-red-300 text-slate-600 border-none">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-        <select
-          #selectElement
-          class="select select-secondary w-full max-w-xs"
-          (change)="
-            selectOptionChanged(
-              $event.target,
-              pickedOrderField[0],
-              selectElement
-            )
-          "
-          [disabled]="isRequestPended">
-          <option [selected]="true">
-            {{ pickedOrderField[0] }}
-          </option>
-          @for (availableOrderField of availableOrderFields; track $index) {
-          <option [selected]="false">
-            {{ availableOrderField }}
-          </option>
-          }
-        </select>
-        <input
-          type="number"
-          [min]="MIN_RESOURCE_COUNT"
-          [max]="MAX_RESOURCE_COUNT"
-          value="1"
-          placeholder="Count"
-          class="input input-bordered max-w-xs w-20"
-          (change)="updateCountValue(pickedOrderField[0], $event.target)"
-          [(ngModel)]="pickedOrderField[1]"
-          [ngModelOptions]="{ standalone: true }"
-          [disabled]="isRequestPended" />
-      </div>
-      }
+      <ng-container formArrayName="components">
+        @for (componentFormGroup of getOrderFormComponents().controls; track
+        $index) {
+        <div
+          class="flex justify-around items-center gap-2"
+          [formGroup]="componentFormGroup">
+          <button
+            [disabled]="!canSubtractOrderField || isRequestPended"
+            (click)="removeFormGroupComponent($index)"
+            class="btn btn-square bg-rose-200 hover:bg-red-300 text-slate-600 border-none">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <select
+            #selectElement
+            class="select select-secondary w-full max-w-xs"
+            formControlName="name"
+            [disabled]="isRequestPended"
+            (change)="handleSelectValueChange($event.target, selectElement)">
+            <option [selected]="true">
+              {{ componentFormGroup.get('name')?.value }}
+            </option>
+            @for (availableOrderField of availableOrderFields; track $index) {
+            <option [selected]="false">
+              {{ availableOrderField }}
+            </option>
+            }
+          </select>
+          <input
+            [ngClass]="{
+              invalid: componentFormGroup.get('count')?.errors
+            }"
+            type="number"
+            [min]="MIN_RESOURCE_COUNT"
+            [max]="MAX_RESOURCE_COUNT"
+            value="1"
+            placeholder="Count"
+            class="input input-bordered max-w-xs w-20"
+            formControlName="count"
+            [disabled]="isRequestPended" />
+        </div>
+        }
+      </ng-container>
       <button
         [disabled]="!canAddOrderField || isRequestPended"
-        (click)="toggleOrderField('add')"
+        (click)="addFormGroupComponent()"
         class="btn bg-emerald-200 hover:bg-emerald-300 text-slate-600 border-none">
         Add
         <svg
@@ -106,16 +102,16 @@
       } @else {
       <div
         [ngClass]="{
-          tooltip: areSomeValuesIncorrect
+          tooltip: orderFormGroup.invalid
         }"
         class="tooltip"
         [attr.data-tip]="
-          areSomeValuesIncorrect ? 'Some values are incorrect' : ''
+          orderFormGroup.invalid ? getInvalidOrderErrorMessage() : ''
         ">
         <button
           class="btn btn-outline w-full"
           (click)="sendOrder()"
-          [disabled]="areSomeValuesIncorrect">
+          [disabled]="orderFormGroup.invalid">
           <span>Process</span>
           <svg
             xmlns="http://www.w3.org/2000/svg"

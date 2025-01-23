@@ -8,12 +8,12 @@ import { environment } from '../../environments/environment.development';
   providedIn: 'root',
 })
 export class RestService {
-  private readonly httpClient = inject(HttpClient);
+  private readonly _httpClient = inject(HttpClient);
 
   scheduleOrder(
-    orderToScheduleDto: OrderToScheduleDto
+    _orderToScheduleDto: OrderToScheduleDto
   ): Observable<Record<'progress', number>> {
-    // return this.httpClient.post(`${this.getBackendUrl()}/order/schedule`);
+    // return this.httpClient.post(`${this.getBackendUrl()}/order/schedule`, { components: orderToScheduleDto });
     return timer(0, 1000).pipe(map(value => ({ progress: value * 10 })));
   }
 

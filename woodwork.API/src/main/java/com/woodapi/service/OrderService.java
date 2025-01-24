@@ -61,8 +61,9 @@ public class OrderService {
         List<ComponentAvailability> componentAvailabilities = this.getComponentsAvailability(availableResourcesDTO, orderItems);
         ScheduledOrderDTO scheduledOrderDTO = new ScheduledOrderDTO(componentAvailabilities, TransactionStatus.REJECTED);
 
-        if (!this.isTransactionEligible(availableResourcesDTO, orderItems)) {
+        if (this.isTransactionNotEligible(availableResourcesDTO, orderItems)) {
             // dont proceed invoice, when transaction is not eligible
+            System.out.println("Co jest");
             return scheduledOrderDTO;
         }
 
@@ -81,14 +82,14 @@ public class OrderService {
             createdInvoiceDTO.setStatus(TransactionStatus.COMPLETED);
         }
 
-        this.orderRepository.saveOrder(scheduledOrderDTO);
         scheduledOrderDTO.setOrderStatus(TransactionStatus.COMPLETED);
+        this.orderRepository.saveOrder(scheduledOrderDTO);
         return scheduledOrderDTO;
     }
 
-    private Boolean isTransactionEligible(AvailableComponentsDTO availableResourcesDTO, OrderItem[] orderItems) {
+    private Boolean isTransactionNotEligible(AvailableComponentsDTO availableResourcesDTO, OrderItem[] orderItems) {
         List<OrderItem> orderItemList = Arrays.asList(orderItems);
-        return orderItemList.stream().anyMatch((item) -> item.getCount() < availableResourcesDTO.getCount(item.getName()));
+        return orderItemList.stream().anyMatch((item) -> item.getCount() > availableResourcesDTO.getCount(item.getName()));
     }
 
     private List<ComponentAvailability> getComponentsAvailability(AvailableComponentsDTO availableResourcesDTO, OrderItem[] orderItems) {

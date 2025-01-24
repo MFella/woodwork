@@ -5,17 +5,17 @@
       class="progress w-full top-0 absolute transition-all"
       [ngClass]="{
         'progress-info': isRequestPended,
-        'progress-success': requestStatus === 'success',
-        'progress-error': requestStatus === 'fail' || requestStatus === 'cancel'
+        'progress-success': orderStatus === 'success',
+        'progress-error': orderStatus === 'fail' || orderStatus === 'cancel'
       }"
       [attr.value]="
-        isRequestPended ? undefined : requestStatus === undefined ? 0 : 100
+        isRequestPended ? undefined : orderStatus === undefined ? 0 : 100
       "
       max="100"></progress>
     <div class="card-body">
-      @if (requestStatus) {
+      @if (orderStatus) {
       <span class="text-xs text-gray-500 absolute top-4 right-4"
-        >Status: {{ requestStatus }}</span
+        >Status: {{ orderStatus }}</span
       >
       }
       <h2 class="card-title">Complete your order</h2>
@@ -24,12 +24,17 @@
         @for (componentFormGroup of getOrderFormComponents().controls; track
         $index) {
         <div
-          class="flex justify-around items-center gap-2"
+          class="flex justify-around items-center gap-2 p-2 border border-slate-100 rounded-xl"
+          [ngClass]="{
+            'bg-slate-100': componentFormGroup.value.name && componentsAvailability.get(componentFormGroup.value.name) === undefined,
+            'bg-emerald-50': componentFormGroup.value.name && componentsAvailability.get(componentFormGroup.value.name)?.isAvailable,
+            'bg-rose-50': componentFormGroup.value.name && componentsAvailability.get(componentFormGroup.value.name)?.isAvailable === false,
+          }"
           [formGroup]="componentFormGroup">
           <button
             [disabled]="!canSubtractOrderField || isRequestPended"
             (click)="removeFormGroupComponent($index)"
-            class="btn btn-square bg-rose-200 hover:bg-red-300 text-slate-600 border-none">
+            class="btn btn-square !bg-rose-200 disabled:opacity-50 hover:bg-red-300 text-slate-600 border-none">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               class="h-6 w-6"

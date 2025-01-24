@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import com.woodapi.dtos.OrderItem;
+import com.woodapi.model.EntityType;
 
 import reactor.core.publisher.Mono;
 
@@ -21,7 +22,10 @@ public class ExternalRestDataService {
         ExternalRestDataService.webClient = webClient;
     }
 
-    public static <T> Mono<ResponseEntity<T>> getMockedResponseEntity(String uriSuffix, Class<T> classType) {
+    public static <T> Mono<ResponseEntity<T>> getMockedResponseEntity(EntityType entityType, Class<T> classType, OrderItem[] orderItems) {
+        String uriSuffix = entityType == EntityType.COMPONENT ?
+            ExternalRestDataService.getComponentsAvailabilityEndpointSuffix(orderItems):
+            ExternalRestDataService.getInvoiceCreationEndpointSuffix();
         return ExternalRestDataService.webClient.get().uri(uriSuffix).retrieve().toEntity(classType);
     }
 
@@ -29,7 +33,7 @@ public class ExternalRestDataService {
         return ExternalRestDataService.webClient.post().uri(uriSuffix).bodyValue(bodyObject).retrieve().toEntity(classType);
     }
 
-    public static String getComponentsAvailabilityEndpointSuffix(OrderItem[] orderItems) {
+    private static String getComponentsAvailabilityEndpointSuffix(OrderItem[] orderItems) {
         String urlSuffix = ExternalRestDataService.WOOD_COMPONENTS_AVAILABILITY_ENDPOINT_SUFFIX;
         for (int i = 0; i < orderItems.length; i++) {
             urlSuffix += orderItems[i].getName() + ",";
@@ -38,7 +42,7 @@ public class ExternalRestDataService {
         return urlSuffix;
     }
 
-    public static String getInvoiceCreationEndpointSuffix() {
+    private static String getInvoiceCreationEndpointSuffix() {
         return ExternalRestDataService.INVOICE_ENDPOINT_SUFFIX;
     }
 }

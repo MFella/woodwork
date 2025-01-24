@@ -1,28 +1,22 @@
 package com.woodapi.service;
 
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
 
 import com.woodapi.dtos.AvailableComponentsDTO;
 import com.woodapi.dtos.CreatedInvoiceDTO;
 import com.woodapi.dtos.OrderItem;
 import com.woodapi.dtos.OrderToScheduleDTO;
 import com.woodapi.dtos.ScheduledOrderDTO;
-import com.woodapi.dtos.WoodComponent;
 import com.woodapi.exceptions.InternalExceptionError;
 import com.woodapi.model.ComponentAvailability;
+import com.woodapi.model.EntityType;
 import com.woodapi.model.TransactionStatus;
-import com.woodapi.repository.InvoiceRepository;
 import com.woodapi.repository.OrderRepository;
 
 import reactor.core.publisher.Mono;
@@ -30,13 +24,11 @@ import reactor.core.publisher.Mono;
 @Service
 public class OrderService {
     private final OrderRepository orderRepository;
-    private final InvoiceRepository invoiceRepository;
 
     @Autowired
-    public OrderService(OrderRepository orderRepository, InvoiceRepository invoiceRepository) 
+    public OrderService(OrderRepository orderRepository) 
     {
         this.orderRepository = orderRepository;
-        this.invoiceRepository = invoiceRepository;
     }
 
     public List<ScheduledOrderDTO> getAllOrders() {
@@ -46,11 +38,9 @@ public class OrderService {
     public ScheduledOrderDTO scheduleOrder(OrderToScheduleDTO orderDto) {
         OrderItem[] orderItems = orderDto.getOrderItems();
 
-        String componentsAvailabilityUrlSuffix = ExternalRestDataService.getComponentsAvailabilityEndpointSuffix(orderItems);
-
         // ask external resource, whether orderComponent count is valid or not
         Mono<ResponseEntity<AvailableComponentsDTO>> mockedAvailableComponentsResponse =
-            ExternalRestDataService.getMockedResponseEntity(componentsAvailabilityUrlSuffix, AvailableComponentsDTO.class);
+            ExternalRestDataService.getMockedResponseEntity(EntityType.COMPONENT, AvailableComponentsDTO.class, orderItems);
 
         AvailableComponentsDTO availableResourcesDTO = mockedAvailableComponentsResponse.block().getBody();
 
@@ -63,14 +53,11 @@ public class OrderService {
 
         if (this.isTransactionNotEligible(availableResourcesDTO, orderItems)) {
             // dont proceed invoice, when transaction is not eligible
-            System.out.println("Co jest");
             return scheduledOrderDTO;
         }
 
-        String invoiceCreationUrlSuffix = ExternalRestDataService.getInvoiceCreationEndpointSuffix();
-
         Mono<ResponseEntity<CreatedInvoiceDTO>> mockedCreatedInvoiceResponse =
-            ExternalRestDataService.getMockedResponseEntity(invoiceCreationUrlSuffix, CreatedInvoiceDTO.class);
+            ExternalRestDataService.getMockedResponseEntity(EntityType.INVOICE, CreatedInvoiceDTO.class, orderItems);
 
         CreatedInvoiceDTO createdInvoiceDTO = mockedCreatedInvoiceResponse.block().getBody();
         scheduledOrderDTO.setCreatedInvoice(createdInvoiceDTO);
@@ -92,8 +79,12 @@ public class OrderService {
         return orderItemList.stream().anyMatch((item) -> item.getCount() > availableResourcesDTO.getCount(item.getName()));
     }
 
-    private List<ComponentAvailability> getComponentsAvailability(AvailableComponentsDTO availableResourcesDTO, OrderItem[] orderItems) {
+    private List<ComponentAvailability> getComponentsAvailability(AvailableComponentsDTO availableResourcesDTO,
+        OrderItem[] orderItems) {
+
         List<OrderItem> orderItemList = Arrays.asList(orderItems);
-        return orderItemList.stream().map((item) -> new ComponentAvailability(item.getName(), item.getCount() <= availableResourcesDTO.getCount(item.getName()))).collect(Collectors.toList());
+        return orderItemList.stream().map((item) ->
+            new ComponentAvailability(item.getName(), item.getCount() <= availableResourcesDTO.getCount(item.getName())))
+            .collect(Collectors.toList());
     }
 }

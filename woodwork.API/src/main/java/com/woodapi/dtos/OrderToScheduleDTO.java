@@ -12,4 +12,7 @@ public class OrderToScheduleDTO {
         return orderItems;
     }
 
+    public void setOrderItems(OrderItem[] orderItems) {
+        this.orderItems = orderItems;
+    }
 }

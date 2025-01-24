@@ -9,8 +9,9 @@ public class OrderItem {
     @NotNull
     private Long count;
 
-    public OrderItem() {
-        super();
+    public OrderItem(WoodComponent component, Long count) {
+        this.name = component;
+        this.count = count;        
     }
 
     public WoodComponent getName() {

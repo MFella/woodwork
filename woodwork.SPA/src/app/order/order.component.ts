@@ -71,10 +71,13 @@ export class OrderComponent implements OnInit {
     components: new FormArray<FormGroup<OrderRecordFormGroup>>([
       new FormGroup<OrderRecordFormGroup>({
         name: new FormControl(
-          'Beam' as OrderEntity,
+          { value: 'Beam' as OrderEntity, disabled: this.isRequestPended },
           this.ORDER_FORM_NAME_VALIDATORS
         ),
-        count: new FormControl(1, this.ORDER_FORM_COUNT_VALIDATORS),
+        count: new FormControl(
+          { value: 1, disabled: this.isRequestPended },
+          this.ORDER_FORM_COUNT_VALIDATORS
+        ),
       }),
     ]),
   });
@@ -161,22 +164,27 @@ export class OrderComponent implements OnInit {
   }
 
   addFormGroupComponent(): void {
-    const firstAvailableComponentName = this.availableOrderFields
-      .keys()
-      .next().value;
-    if (!firstAvailableComponentName) {
+    const controlsLength = this.getOrderFormComponents().controls.length;
+    if (
+      controlsLength === orderEntities.length ||
+      this.availableOrderFields.size === 0
+    ) {
       console.error('Cannot add control');
       return;
     }
 
-    this.availableOrderFields.delete(firstAvailableComponentName);
+    const orderField = Array.from(this.availableOrderFields)[0];
+    this.availableOrderFields.delete(orderField);
     this.getOrderFormComponents().push(
       new FormGroup<OrderRecordFormGroup>({
         name: new FormControl(
-          firstAvailableComponentName,
+          { value: orderField, disabled: this.isRequestPended },
           this.ORDER_FORM_NAME_VALIDATORS
         ),
-        count: new FormControl(1, this.ORDER_FORM_COUNT_VALIDATORS),
+        count: new FormControl(
+          { value: 1, disabled: this.isRequestPended },
+          this.ORDER_FORM_COUNT_VALIDATORS
+        ),
       })
     );
   }
@@ -275,8 +283,9 @@ export class OrderComponent implements OnInit {
       )
     );
 
-    this.canSubtractOrderField =
-      this.availableOrderFields.size > 0 &&
-      this.getOrderFormComponents().controls.length > 1;
+    const currentFormControlsLength =
+      this.getOrderFormComponents().controls.length;
+    this.canSubtractOrderField = currentFormControlsLength > 1;
+    this.canAddOrderField = currentFormControlsLength < orderEntities.length;
   }
 }

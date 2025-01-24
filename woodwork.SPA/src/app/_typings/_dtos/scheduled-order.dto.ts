@@ -4,6 +4,7 @@ export type ScheduledOrderDTO<T extends OrderEntity> = {
   componentsAvailability: Array<ComponentAvailability<T>>;
   id: string;
   createdInvoice: CreatedInvoice;
+  orderStatus: `${TransactionStatus}`;
 };
 
 export type ComponentAvailability<T extends OrderEntity> = {
@@ -13,4 +14,12 @@ export type ComponentAvailability<T extends OrderEntity> = {
 
 type CreatedInvoice = {
   id: string;
+  transactionStatus: `${TransactionStatus}`;
 };
+
+enum TransactionStatus {
+  NOT_STARTED = 'NOT_STARTED',
+  PENDING = 'PENDING',
+  COMPLETED = 'COMPLETED',
+  REJECTED = 'REJECTED',
+}

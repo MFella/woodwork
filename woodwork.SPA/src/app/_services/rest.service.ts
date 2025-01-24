@@ -20,7 +20,9 @@ export class RestService {
 
   scheduleOrder<T extends OrderEntity>(
     orderToScheduleDto: OrderToScheduleDto<T>
-  ): Observable<Array<ComponentAvailability<T>>> {
+  ): Observable<
+    Pick<ScheduledOrderDTO<T>, 'componentsAvailability' | 'orderStatus'>
+  > {
     return this.httpClient
       .post<ScheduledOrderDTO<T>>(
         `${this.getBackendUrl('order')}/schedule`,
@@ -28,7 +30,10 @@ export class RestService {
       )
       .pipe(
         delay(RestService.FAKE_DELAY_TIME_OFFSET_MS),
-        map(scheduledOrderDTO => scheduledOrderDTO.componentsAvailability)
+        map(scheduledOrderDTO => ({
+          componentsAvailability: scheduledOrderDTO.componentsAvailability,
+          orderStatus: scheduledOrderDTO.orderStatus,
+        }))
       );
   }
 

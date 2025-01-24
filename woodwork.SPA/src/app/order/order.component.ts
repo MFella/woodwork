@@ -27,7 +27,7 @@ import { AlertService } from '../alert.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TypeUtil } from '../util/type-util';
 import type { ComponentAvailability } from '../_typings/_dtos/scheduled-order.dto';
-import type { RequestStatus } from '../_typings/common.typings';
+import type { OrderStatus } from '../_typings/common.typings';
 
 const formErrorMessages = {
   min: 'Value is less than 1',
@@ -81,10 +81,10 @@ export class OrderComponent implements OnInit {
 
   canAddOrderField = true;
   canSubtractOrderField = false;
-  requestStatus?: RequestStatus;
+  orderStatus?: OrderStatus;
 
   get isRequestPended(): boolean {
-    return this.requestStatus === 'pending';
+    return this.orderStatus === 'pending';
   }
 
   ngOnInit(): void {
@@ -122,28 +122,30 @@ export class OrderComponent implements OnInit {
       return;
     }
 
-    this.requestStatus = 'pending';
+    this.orderStatus = 'pending';
     this.#changeDetectorRef.detectChanges();
 
     this.sendOrderSubscription = this.restService
       .scheduleOrder({ orderItems })
       .subscribe({
-        next: componentsAvailability => {
+        next: ({ componentsAvailability, orderStatus }) => {
           this.componentsAvailability = new Map(
             componentsAvailability.map(availability => [
               availability.component,
               availability,
             ])
           );
-          this.requestStatus = 'success';
+          this.orderStatus = orderStatus === 'COMPLETED' ? 'success' : 'fail';
           this.#changeDetectorRef.detectChanges();
+          this.sendOrderSubscription?.unsubscribe();
+          this.sendOrderSubscription = undefined;
         },
         error: (error: unknown) => {
           if (TypeUtil.isKeyInUnknown(error, 'message')) {
             this.alertService.showError(error.message);
           }
 
-          this.requestStatus = 'fail';
+          this.orderStatus = 'fail';
         },
       });
   }
@@ -155,7 +157,7 @@ export class OrderComponent implements OnInit {
 
     this.sendOrderSubscription.unsubscribe();
     this.sendOrderSubscription = undefined;
-    this.requestStatus = 'cancel';
+    this.orderStatus = 'cancel';
   }
 
   addFormGroupComponent(): void {

@@ -4,20 +4,20 @@ import java.util.List;
 import java.util.UUID;
 
 import com.woodapi.model.ComponentAvailability;
-import com.woodapi.model.OrderStatus;
+import com.woodapi.model.TransactionStatus;
 
 public class ScheduledOrderDTO {
     private List<ComponentAvailability> componentsAvailability;
-    private OrderStatus status = OrderStatus.NOT_STARTED;
+    private TransactionStatus status = TransactionStatus.NOT_STARTED;
     private CreatedInvoiceDTO createdInvoiceDTO;
     private final String id = UUID.randomUUID().toString();
 
-    public ScheduledOrderDTO(List<ComponentAvailability> componentsAvailability, OrderStatus status) {
+    public ScheduledOrderDTO(List<ComponentAvailability> componentsAvailability, TransactionStatus status) {
         this.componentsAvailability = componentsAvailability;
         this.status = status;
     }
 
-    public void setOrderStatus(OrderStatus status) {
+    public void setOrderStatus(TransactionStatus status) {
         this.status = status;
     }
 
@@ -35,5 +35,9 @@ public class ScheduledOrderDTO {
 
     public CreatedInvoiceDTO getCreatedInvoice() {
         return this.createdInvoiceDTO;
+    }
+
+    public TransactionStatus getOrderStatus() {
+        return this.status;
     }
 }

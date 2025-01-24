@@ -21,7 +21,7 @@ import com.woodapi.dtos.ScheduledOrderDTO;
 import com.woodapi.dtos.WoodComponent;
 import com.woodapi.exceptions.InternalExceptionError;
 import com.woodapi.model.ComponentAvailability;
-import com.woodapi.model.OrderStatus;
+import com.woodapi.model.TransactionStatus;
 import com.woodapi.repository.InvoiceRepository;
 import com.woodapi.repository.OrderRepository;
 
@@ -59,9 +59,10 @@ public class OrderService {
         }
 
         List<ComponentAvailability> componentAvailabilities = this.getComponentsAvailability(availableResourcesDTO, orderItems);
-        ScheduledOrderDTO scheduledOrderDTO = new ScheduledOrderDTO(componentAvailabilities, OrderStatus.REJECTED);
+        ScheduledOrderDTO scheduledOrderDTO = new ScheduledOrderDTO(componentAvailabilities, TransactionStatus.REJECTED);
+
         if (!this.isTransactionEligible(availableResourcesDTO, orderItems)) {
-            // return availabilites, and rejected order status
+            // dont proceed invoice, when transaction is not eligible
             return scheduledOrderDTO;
         }
 
@@ -73,9 +74,15 @@ public class OrderService {
         CreatedInvoiceDTO createdInvoiceDTO = mockedCreatedInvoiceResponse.block().getBody();
         scheduledOrderDTO.setCreatedInvoice(createdInvoiceDTO);
 
-        this.orderRepository.saveOrder(scheduledOrderDTO);
+        if (createdInvoiceDTO == null) {
+            createdInvoiceDTO = new CreatedInvoiceDTO();
+            createdInvoiceDTO.setStatus(TransactionStatus.REJECTED);
+        } else {
+            createdInvoiceDTO.setStatus(TransactionStatus.COMPLETED);
+        }
 
-        System.out.println(scheduledOrderDTO.getId());
+        this.orderRepository.saveOrder(scheduledOrderDTO);
+        scheduledOrderDTO.setOrderStatus(TransactionStatus.COMPLETED);
         return scheduledOrderDTO;
     }
 

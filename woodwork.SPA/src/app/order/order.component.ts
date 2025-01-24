@@ -24,8 +24,10 @@ import { RestService } from '../_services/rest.service';
 import { type Subscription } from 'rxjs';
 import { NgClass } from '@angular/common';
 import { AlertService } from '../alert.service';
-import type { OrderToScheduleDto } from '../_typings/_dtos/order-to-schedule.dto';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { TypeUtil } from '../util/type-util';
+import type { ComponentAvailability } from '../_typings/_dtos/scheduled-order.dto';
+import type { RequestStatus } from '../_typings/common.typings';
 
 const formErrorMessages = {
   min: 'Value is less than 1',
@@ -62,6 +64,8 @@ export class OrderComponent implements OnInit {
   private sendOrderSubscription?: Subscription;
   allOrderFields: Set<OrderEntity> = new Set<OrderEntity>(orderEntities);
   availableOrderFields: Set<OrderEntity> = new Set<OrderEntity>();
+  componentsAvailability: Map<OrderEntity, ComponentAvailability<OrderEntity>> =
+    new Map();
 
   orderFormGroup: FormGroup = new FormGroup({
     components: new FormArray<FormGroup<OrderRecordFormGroup>>([
@@ -77,8 +81,11 @@ export class OrderComponent implements OnInit {
 
   canAddOrderField = true;
   canSubtractOrderField = false;
-  isRequestPended = false;
-  progressOfRequest = 0;
+  requestStatus?: RequestStatus;
+
+  get isRequestPended(): boolean {
+    return this.requestStatus === 'pending';
+  }
 
   ngOnInit(): void {
     this.observeFormArrayValueChanged();
@@ -87,8 +94,14 @@ export class OrderComponent implements OnInit {
   }
 
   sendOrder(): void {
-    const orderItems = this.getOrderFormComponents()
-      .value as OrderToScheduleDto;
+    const orderItems = this.getOrderFormComponents().value;
+
+    if (!orderItems.every(x => TypeUtil.hasDefinedNonNullProps(x))) {
+      console.error(
+        'Cannot send order - some form fields are null or undefined'
+      );
+      return;
+    }
 
     // if there are some form violations - display error banner
     if (
@@ -109,21 +122,29 @@ export class OrderComponent implements OnInit {
       return;
     }
 
-    this.isRequestPended = true;
+    this.requestStatus = 'pending';
+    this.#changeDetectorRef.detectChanges();
 
     this.sendOrderSubscription = this.restService
-      .scheduleOrder(orderItems)
-      .subscribe(value => {
-        this.progressOfRequest = value.progress;
-        if (
-          this.progressOfRequest >= OrderComponent.PROGRESS_FINISHED_THRESHOLD
-        ) {
-          this.sendOrderSubscription?.unsubscribe();
-          this.sendOrderSubscription = undefined;
-          this.isRequestPended = false;
-        }
+      .scheduleOrder({ orderItems })
+      .subscribe({
+        next: componentsAvailability => {
+          this.componentsAvailability = new Map(
+            componentsAvailability.map(availability => [
+              availability.component,
+              availability,
+            ])
+          );
+          this.requestStatus = 'success';
+          this.#changeDetectorRef.detectChanges();
+        },
+        error: (error: unknown) => {
+          if (TypeUtil.isKeyInUnknown(error, 'message')) {
+            this.alertService.showError(error.message);
+          }
 
-        this.#changeDetectorRef.detectChanges();
+          this.requestStatus = 'fail';
+        },
       });
   }
 
@@ -134,8 +155,7 @@ export class OrderComponent implements OnInit {
 
     this.sendOrderSubscription.unsubscribe();
     this.sendOrderSubscription = undefined;
-    this.isRequestPended = false;
-    this.progressOfRequest = 0;
+    this.requestStatus = 'cancel';
   }
 
   addFormGroupComponent(): void {

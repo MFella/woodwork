@@ -1,6 +1,7 @@
 package com.woodapi.service;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -8,88 +9,83 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.ClientRequest;
-import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import com.woodapi.dtos.AvailableResourcesDTO;
+import com.woodapi.dtos.AvailableComponentsDTO;
+import com.woodapi.dtos.CreatedInvoiceDTO;
 import com.woodapi.dtos.OrderItem;
 import com.woodapi.dtos.OrderToScheduleDTO;
 import com.woodapi.dtos.ScheduledOrderDTO;
+import com.woodapi.dtos.WoodComponent;
+import com.woodapi.exceptions.InternalExceptionError;
 import com.woodapi.model.ComponentAvailability;
 import com.woodapi.model.OrderStatus;
+import com.woodapi.repository.InvoiceRepository;
+import com.woodapi.repository.OrderRepository;
 
 import reactor.core.publisher.Mono;
 
 @Service
 public class OrderService {
-    private final static String WOOD_COMPONENTS_AVAILABILITY_ENDPOINT_SUFFIX = "/available?components=";
-    // private final static String WOOD_COMPONENTS_BASE_URL = "https://";
-    private final Map<String, OrderToScheduleDTO> orderMap = new HashMap<>();
-    private final WebClient webClient;
+    private final OrderRepository orderRepository;
+    private final InvoiceRepository invoiceRepository;
 
     @Autowired
-    public OrderService(WebClient webClient) 
+    public OrderService(OrderRepository orderRepository, InvoiceRepository invoiceRepository) 
     {
-        // WebClient with mocked response
-        this.webClient = webClient;
-        // webClientBuilder.baseUrl(OrderService.WOOD_COMPONENTS_BASE_URL)
-        // .exchangeFunction(clientRequest -> this.getMockedClientResponse(clientRequest))
-        // .build();
+        this.orderRepository = orderRepository;
+        this.invoiceRepository = invoiceRepository;
     }
 
-    public OrderToScheduleDTO getOrderById(String orderId) {
-        return orderMap.get(orderId);
+    public List<ScheduledOrderDTO> getAllOrders() {
+        return this.orderRepository.getAllOrders();
     }
 
     public ScheduledOrderDTO scheduleOrder(OrderToScheduleDTO orderDto) {
         OrderItem[] orderItems = orderDto.getOrderItems();
-        final String uuid = UUID.randomUUID().toString();
-        orderMap.put(uuid, orderDto);
 
-        orderDto.setStatus(OrderStatus.PENDING);
-
-        String componentsAvailabilityUrlSuffix = this.getExternalResourceUrlSuffix(orderItems);
+        String componentsAvailabilityUrlSuffix = ExternalRestDataService.getComponentsAvailabilityEndpointSuffix(orderItems);
 
         // ask external resource, whether orderComponent count is valid or not
-        Mono<AvailableResourcesDTO> response = this.webClient.get().uri(componentsAvailabilityUrlSuffix).retrieve().bodyToMono(AvailableResourcesDTO.class);
+        Mono<ResponseEntity<AvailableComponentsDTO>> mockedAvailableComponentsResponse =
+            ExternalRestDataService.getMockedResponseEntity(componentsAvailabilityUrlSuffix, AvailableComponentsDTO.class);
 
-        AvailableResourcesDTO availableResourcesDTO = response.block();
-        Boolean isTransactionEligible = this.isTransactionEligible(availableResourcesDTO, orderItems);
+        AvailableComponentsDTO availableResourcesDTO = mockedAvailableComponentsResponse.block().getBody();
 
-        if (isTransactionEligible) {
-            //TODO: process invoice data
+        if (availableResourcesDTO == null) {
+            throw new InternalExceptionError("Cannot find resource");
         }
 
         List<ComponentAvailability> componentAvailabilities = this.getComponentsAvailability(availableResourcesDTO, orderItems);
-        return new ScheduledOrderDTO(componentAvailabilities); 
-    }
-
-    private String getExternalResourceUrlSuffix(OrderItem[] orderItems) {
-        String urlSuffix = OrderService.WOOD_COMPONENTS_AVAILABILITY_ENDPOINT_SUFFIX;
-        for (int i = 0; i < orderItems.length; i++) {
-            urlSuffix += orderItems[i].getComponent() + ",";
+        ScheduledOrderDTO scheduledOrderDTO = new ScheduledOrderDTO(componentAvailabilities, OrderStatus.REJECTED);
+        if (!this.isTransactionEligible(availableResourcesDTO, orderItems)) {
+            // return availabilites, and rejected order status
+            return scheduledOrderDTO;
         }
 
-        return urlSuffix;
+        String invoiceCreationUrlSuffix = ExternalRestDataService.getInvoiceCreationEndpointSuffix();
+
+        Mono<ResponseEntity<CreatedInvoiceDTO>> mockedCreatedInvoiceResponse =
+            ExternalRestDataService.getMockedResponseEntity(invoiceCreationUrlSuffix, CreatedInvoiceDTO.class);
+
+        CreatedInvoiceDTO createdInvoiceDTO = mockedCreatedInvoiceResponse.block().getBody();
+        scheduledOrderDTO.setCreatedInvoice(createdInvoiceDTO);
+
+        this.orderRepository.saveOrder(scheduledOrderDTO);
+
+        System.out.println(scheduledOrderDTO.getId());
+        return scheduledOrderDTO;
     }
 
-    private Boolean isTransactionEligible(AvailableResourcesDTO availableResourcesDTO, OrderItem[] orderItems) {
+    private Boolean isTransactionEligible(AvailableComponentsDTO availableResourcesDTO, OrderItem[] orderItems) {
         List<OrderItem> orderItemList = Arrays.asList(orderItems);
-        return orderItemList.stream().anyMatch((item) -> item.getCount() < availableResourcesDTO.getCount(item.getComponent()));
+        return orderItemList.stream().anyMatch((item) -> item.getCount() < availableResourcesDTO.getCount(item.getName()));
     }
 
-    private List<ComponentAvailability> getComponentsAvailability(AvailableResourcesDTO availableResourcesDTO, OrderItem[] orderItems) {
+    private List<ComponentAvailability> getComponentsAvailability(AvailableComponentsDTO availableResourcesDTO, OrderItem[] orderItems) {
         List<OrderItem> orderItemList = Arrays.asList(orderItems);
-        return orderItemList.stream().map((item) -> new ComponentAvailability(item.getComponent(), item.getCount() > availableResourcesDTO.getCount(item.getComponent()))).collect(Collectors.toList());
+        return orderItemList.stream().map((item) -> new ComponentAvailability(item.getName(), item.getCount() <= availableResourcesDTO.getCount(item.getName()))).collect(Collectors.toList());
     }
-
-    private Mono<ClientResponse> getMockedClientResponse(ClientRequest clientRequest) {
-        return Mono.just(ClientResponse.create(HttpStatus.OK)
-        .header("content-type", "application/json")
-        .body("{ \"key\" : \"value\"}")
-        .build());
-    } 
 }

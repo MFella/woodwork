@@ -2,14 +2,22 @@
   <div
     class="card bg-base-100 shadow-xl w-full sm:min-w-[30rem] border border-slate-100 overflow-hidden">
     <progress
-      class="progress progress-info w-full top-0 absolute transition-all"
+      class="progress w-full top-0 absolute transition-all"
       [ngClass]="{
-        'progress-info': progressOfRequest < 100,
-        'progress-success': progressOfRequest === 100
+        'progress-info': isRequestPended,
+        'progress-success': requestStatus === 'success',
+        'progress-error': requestStatus === 'fail' || requestStatus === 'cancel'
       }"
-      [value]="progressOfRequest"
+      [attr.value]="
+        isRequestPended ? undefined : requestStatus === undefined ? 0 : 100
+      "
       max="100"></progress>
     <div class="card-body">
+      @if (requestStatus) {
+      <span class="text-xs text-gray-500 absolute top-4 right-4"
+        >Status: {{ requestStatus }}</span
+      >
+      }
       <h2 class="card-title">Complete your order</h2>
       <strong class="text-gray-500 text-xs">Make wise decision 🌌</strong>
       <ng-container formArrayName="components">

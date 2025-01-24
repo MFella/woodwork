@@ -1,20 +1,15 @@
 package com.woodapi.dtos;
 
-import com.woodapi.model.OrderStatus;
+import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
 
 public class OrderToScheduleDTO {
+    @NotNull
+    @Valid
     private OrderItem[] orderItems;
-    private OrderStatus status = OrderStatus.NOT_STARTED;
 
     public OrderItem[] getOrderItems() {
         return orderItems;
     }
 
-    public void setStatus(OrderStatus orderStatus) {
-        this.status = orderStatus;
-    }
-
-    public OrderStatus getStatus() {
-        return this.status;
-    }
 }
